@@ -36,11 +36,11 @@ User.prototype.validate = function () {
       this.errors.push({ username: ["Username is required."] });
     }
     if (!this.data?.email) {
-      this.errors.push({ username: ["Email is required."] });
+      this.errors.push({ email: ["Email is required."] });
     }
 
     if (!this.data?.password) {
-      this.errors.push({ username: ["Password is required."] });
+      this.errors.push({ password: ["Password is required."] });
     }
 
     if (this.data.username) {
