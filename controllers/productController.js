@@ -13,7 +13,7 @@ exports.createProduct = function (req, res) {
 };
 
 exports.getProducts = function (req, res) {
-  let product = new Product(undefined, req.query.owner);
+  let product = new Product(req.body);
   product
     .getProducts()
     .then((products) => {
@@ -25,12 +25,17 @@ exports.getProducts = function (req, res) {
 };
 
 exports.addQuantity = function (req, res) {
-  if (!req.body.productId) {
-    res.json("Product Id is required.");
-  } else if (!req.body.quantity) {
-    res.json("Quantity is required.");
-  } else {
-    const product = new Product(req.body, req.session.user._userId,req.body.productId);
-    product.addQuantity();
-  }
+  const product = new Product(
+    req.body,
+    req.session.user._userId,
+    req.body.productId
+  );
+  product
+    .addQuantity()
+    .then((product) => {
+      res.json(product);
+    })
+    .catch((err) => {
+      res.json(err);
+    });
 };

@@ -4,10 +4,9 @@ const client = require("../db");
 const productsCollection = client.db("simple-app").collection("products");
 const categoriesCollection = client.db("simple-app").collection("categories");
 
-let Product = function (data, ownerId, productId) {
+let Product = function (data, ownerId) {
   this.data = data;
   this.ownerId = ownerId;
-  this.productId = productId;
   this.errors = [];
 };
 
@@ -24,12 +23,17 @@ Product.prototype.cleanUp = function () {
   if (typeof this.data.categoryId != "string") {
     this.data.categoryId = "";
   }
+  if (typeof this.data.ownerId != "string") {
+    this.data.ownerId = "";
+  }
   this.data = {
     name: this.data.name,
     price: this.data.price,
-    categoryId: this.data.categoryId,
-    quantity: this.data.quantity,
-    ownerId: new ObjectId(this.ownerId),
+    categoryId: this.data?.categoryId && new ObjectId(this.data?.categoryId),
+    quantity: parseInt(this.data.quantity),
+    ownerId:
+      (this.data.ownerId || this.data.ownerId) &&
+      new ObjectId(this.ownerId ? this.ownerId : this.data.ownerId),
   };
 };
 
@@ -128,54 +132,61 @@ Product.prototype.createProduct = function () {
 
 Product.prototype.getProducts = function () {
   return new Promise(async (resolve, reject) => {
+    this.cleanUp();
+
+    let aggOpertaions = [];
+
+    if (this.data.ownerId) {
+      aggOpertaions.push({
+        $match: {
+          ownerId: this.data.ownerId,
+        },
+      });
+    }
+    if (this.data.categoryId) {
+      aggOpertaions.push({
+        $match: {
+          categoryId: this.data.categoryId,
+        },
+      });
+    }
+    if (this.data.ownerId) {
+      aggOpertaions.push({
+        $lookup: {
+          from: "users",
+          localField: "ownerId",
+          foreignField: "_id",
+          as: "owner",
+        },
+      });
+    }
+    aggOpertaions.push({
+      $lookup: {
+        from: "categories",
+        localField: "categoryId",
+        foreignField: "_id",
+        as: "category",
+      },
+    });
+    if (this.data.ownerId) {
+      aggOpertaions.push({
+        $project: {
+          owner: { $arrayElemAt: ["$owner.username", 0] },
+          category: { $arrayElemAt: ["$category.name", 0] },
+          name: true,
+        },
+      });
+    } else {
+      aggOpertaions.push({
+        $project: {
+          category: { $arrayElemAt: ["$category.name", 0] },
+          name: true,
+        },
+      });
+    }
     try {
       const products = await productsCollection
-        .aggregate([
-          {
-            $match: {
-              $and: [
-                {
-                  ...(this.categoryId && {
-                    categoryId: new ObjectId(this.categoryId),
-                  }),
-                },
-                {
-                  ...(this.ownerId && {
-                    ownerId: new ObjectId(this.ownerId),
-                  }),
-                },
-              ],
-            },
-          },
-          {
-            // ...(this.ownerId && {
-            $lookup: {
-              from: "users",
-              localField: "ownerId",
-              foreignField: "_id",
-              as: "owner",
-              pipeline: [{ $project: { _id: 1, username: 1 } }],
-            },
-            // }),
-          },
-          {
-            // ...(this.categoryId && {
-            $lookup: {
-              from: "categories",
-              localField: "categoryId",
-              foreignField: "_id",
-              as: "category",
-            },
-            // }),
-          },
-          {
-            $project: {
-              owner: { $arrayElemAt: ["$owner.username", 0] },
-              category: { $arrayElemAt: ["$category.name", 0] },
-              name: true,
-            },
-          },
-        ])
+        .aggregate(aggOpertaions)
         .toArray();
       resolve(products);
     } catch {
@@ -184,22 +195,39 @@ Product.prototype.getProducts = function () {
   });
 };
 
-module.exports = Product;
-
 Product.prototype.addQuantity = function () {
   return new Promise(async (resolve, reject) => {
-    try {
-      const udpatedProduct = productsCollection.updateOne(
-        { _id: new ObjectId(this.productId) },
-        { $inc: { quantity: this.data.quantity } }
-      );
-      resolve(udpatedProduct);
-    } catch {
-      reject("Something went wrong...");
+    if (!this.ownerId) {
+      reject("You must be login to perform that action.");
+    } else if (!this.productId) {
+      reject("productId is required.");
+    } else if (!this.data.quantity) {
+      reject("Quantity is required.");
+    } else {
+      try {
+        productsCollection
+          .findOneAndUpdate(
+            { _id: new ObjectId(this.productId) },
+            { $inc: { quantity: this.data.quantity } }
+          )
+          .then((val) => {
+            if (val.value) {
+              resolve(val.value);
+            } else {
+              reject("Product does not exist.");
+            }
+          })
+          .catch((err) => {
+            reject(err);
+          });
+      } catch {
+        reject("Something went wrong...");
+      }
     }
   });
 };
 
+module.exports = Product;
 // let aggOpertaions = uniqueOperations.concat([
 //   {
 //     $lookup: {
