@@ -5,7 +5,7 @@ const cors = require("cors");
 const session = require("express-session");
 const app = express();
 app.use(bodyParser.urlencoded({ extended: true }));
-app.use(bodyParser.json());
+app.use(express.json());
 
 const sessionOptions = {
   resave: false,
