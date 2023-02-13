@@ -29,4 +29,6 @@ router.post(
   categoryController.create
 );
 
+router.post('/demo')
+
 module.exports = router;
